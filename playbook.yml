@@ -1,0 +1,79 @@
+- hosts: all
+  become: yes
+  become_method: sudo
+  tasks:
+    - hostname:
+        name: devmachine001
+    
+    - name: install the 'Server with GUI' group
+      yum:
+        name: "@^Server with GUI"
+        state: present
+        
+    - name: install the 'Development Tools' group
+      yum:
+        name: "@Development Tools"
+        state: present
+          
+    - name: install gnu emacs
+      yum:
+        name: emacs
+        state: present
+
+    - name: install screen
+      yum:
+        name: screen
+        state: present
+    
+    - name: install samba
+      yum:
+        name: [ samba, samba-client]
+        state: present
+
+    - name: 'share /vagrant directory via samba for easy access'
+      copy:
+        src: smb.conf
+        dest: /etc/samba/smb.conf
+
+    - name: autorelabel /etc/samba/
+      command: /sbin/restorecon -Rv /etc/samba
+
+    - name: start samba
+      systemd:
+        name: smb.service
+        state: started
+        enabled: yes
+
+    - name: start firewalld
+      systemd:
+        name: firewalld
+        state: started
+        enabled: yes
+        
+
+    - name: add firewalld rule for samba
+      firewalld:
+        service: samba
+        immediate: yes
+        permanent: yes
+        state: enabled
+        zone: public
+  
+    - name: install openssh public key for vagrant user
+      authorized_key:
+        user: vagrant
+        key: "{{ lookup('file', lookup('env', 'HOME') + '/.ssh/id_rsa.pub') }}"
+        state: present
+
+    - name: install openssh public key for root user
+      authorized_key:
+        user: root
+        key: "{{ lookup('file', lookup('env', 'HOME') + '/.ssh/id_rsa.pub') }}"
+        state: present
+
+    - name: All ipv4 addresses of the machine
+      debug:
+        var: ansible_all_ipv4_addresses
+    - name: default ipv4 address
+      debug:
+        var: ansible_default_ipv4.address
