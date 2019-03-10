@@ -5,39 +5,44 @@
     - hostname:
         name: devmachine001
     
-    - name: install the 'Server with GUI' group
-      yum:
-        name: "@^Server with GUI"
-        state: present
+    # - name: install the 'Server with GUI' group
+    #   yum:
+    #     name: "@^Server with GUI"
+    #     state: present
         
     - name: install the 'Development Tools' group
       yum:
         name: "@Development Tools"
         state: present
           
-    - name: install gnu emacs
+    - name: install gnu emacs, screen and libsemanage-python
       yum:
-        name: emacs
+        name: [emacs-nox, screen, libsemanage-python]
         state: present
 
-    - name: install screen
-      yum:
-        name: screen
-        state: present
-    
     - name: install samba
       yum:
-        name: [ samba, samba-client]
+        name: [samba, samba-client]
         state: present
 
     - name: 'share /vagrant directory via samba for easy access'
       copy:
         src: smb.conf
         dest: /etc/samba/smb.conf
+      notify:
+        - relabel /etc/samba
+        - restart samba
 
-    - name: autorelabel /etc/samba/
-      command: /sbin/restorecon -Rv /etc/samba
-
+    - name: set samba selinux booleans
+      seboolean:
+        name: "{{ item }}"
+        state: yes
+        persistent: yes
+      with_items:
+        - samba_share_nfs
+        - samba_export_all_ro
+        - samba_export_all_rw
+    
     - name: start samba
       systemd:
         name: smb.service
@@ -77,3 +82,13 @@
     - name: default ipv4 address
       debug:
         var: ansible_default_ipv4.address
+  handlers :
+    - name: reapply selinux labels on /etc/samba
+      listen: "relabel /etc/samba"
+      command: /sbin/restorecon -Rv /etc/samba
+    - name: restart samba
+      listen: "restart samba"
+      systemd:
+        name: smb.service
+        state: restarted
+        
